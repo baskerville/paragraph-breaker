@@ -261,10 +261,6 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
             break;
         }
     }
-
-    if *head == NULL {
-        // Do something drastic…
-    }
 }
 
 pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<usize> {
@@ -298,6 +294,10 @@ pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, loosenes
                 explore(&mut nodes, &mut head, items, lengths, &sums, threshold, boundary, position);
             },
             _ => {},
+        }
+
+        if head == NULL {
+            break;
         }
     }
 
@@ -443,5 +443,8 @@ mod tests {
         assert_eq!(medium, vec![24, 52, 82, 108, 141, 169, 199, 225, 253, 263]);
         assert_eq!(medium_tight, vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
         assert_eq!(medium_loose, vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
+        // If the algorithm can't satisfy the constraints, the return value is empty.
+        let too_narrow = breakpoints(&items, &[100], 1.0, 0);
+        assert_eq!(too_narrow, vec![]);
     }
 }
