@@ -56,6 +56,7 @@ struct Node {
     width: i32,
     stretch: i32,
     shrink: i32,
+    ratio: f32,
     demerits: u32,
     fitness_class: usize,
     best_from: usize,
@@ -70,6 +71,7 @@ impl Default for Node {
             width: 0,
             stretch: 0,
             shrink: 0,
+            ratio: 0.0,
             demerits: 0,
             fitness_class: 1,
             best_from: NULL,
@@ -89,6 +91,7 @@ struct Sums {
 struct Candidate {
     demerits: u32,
     address: usize,
+    ratio: f32,
 }
 
 #[inline]
@@ -187,7 +190,8 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
     loop {
         let mut min_demerits = ::std::u32::MAX;
         let mut candidates = [Candidate { demerits: ::std::u32::MAX,
-                                          address: NULL }; 4];
+                                          address: NULL,
+                                          ratio: 0.0 }; 4];
         loop {
             let next = nodes[current].next;
             let line = nodes[current].line + 1;
@@ -212,6 +216,7 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
                 if d < candidates[class].demerits {
                     candidates[class].demerits = d;
                     candidates[class].address = current;
+                    candidates[class].ratio = ratio;
                     if d < min_demerits {
                         min_demerits = d;
                     }
@@ -242,6 +247,7 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
                         width: sums_after.width,
                         stretch: sums_after.stretch,
                         shrink: sums_after.shrink,
+                        ratio: candidates[c].ratio,
                         demerits: candidates[c].demerits,
                         best_from: candidates[c].address,
                         next: current,
@@ -263,7 +269,7 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
     }
 }
 
-pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<usize> {
+pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
     let boundary = if looseness != 0 {
         ::std::usize::MAX
     } else {
@@ -340,7 +346,7 @@ pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, loosenes
     let mut result = Vec::new();
 
     while chosen != NULL {
-        result.push(nodes[chosen].position);
+        result.push((nodes[chosen].position, nodes[chosen].ratio));
         chosen = nodes[chosen].best_from;
     }
 
@@ -429,6 +435,10 @@ mod tests {
         result
     }
 
+    macro_rules! pos {
+        ($x:expr) => ($x.iter().map(|x| x.0).collect::<Vec<usize>>());
+    }
+
     #[test]
     fn test_breakpoints() {
         let mut items = make_items(FROG_PRINCE);
@@ -438,11 +448,11 @@ mod tests {
         let medium_tight = breakpoints(&items, &[500], 1.0, -1);
         let medium_loose = breakpoints(&items, &[500], 2.5, 1);
         // Knuth, Donald: Digital Typography, p. 81.
-        assert_eq!(narrow, vec![18, 38, 64, 84, 106, 130, 155, 175, 199, 221, 241, 263]);
+        assert_eq!(pos!(narrow), vec![18, 38, 64, 84, 106, 130, 155, 175, 199, 221, 241, 263]);
         // Knuth, Donald: Digital Typography, p. 113.
-        assert_eq!(medium, vec![24, 52, 82, 108, 141, 169, 199, 225, 253, 263]);
-        assert_eq!(medium_tight, vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
-        assert_eq!(medium_loose, vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
+        assert_eq!(pos!(medium), vec![24, 52, 82, 108, 141, 169, 199, 225, 253, 263]);
+        assert_eq!(pos!(medium_tight), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
+        assert_eq!(pos!(medium_loose), vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
         // If the algorithm can't satisfy the constraints, the return value is empty.
         let too_narrow = breakpoints(&items, &[100], 1.0, 0);
         assert_eq!(too_narrow, vec![]);
