@@ -7,9 +7,10 @@ const INFINITE_PENALTY: i32  = 10_000;
 const NULL: usize = ::std::usize::MAX;
 
 #[derive(Debug, Copy, Clone)]
-pub enum Item {
+pub enum Item<T> {
     Box {
         width: i32,
+        data: T,
     },
     Glue {
         width: i32,
@@ -23,7 +24,7 @@ pub enum Item {
     },
 }
 
-impl Item {
+impl<T> Item<T> {
     #[inline]
     pub fn is_box(&self) -> bool {
         match *self {
@@ -95,7 +96,7 @@ struct Candidate {
 }
 
 #[inline]
-fn ratio(ideal_len: i32, sums: &Sums, item: &Item, active: &Node) -> f32 {
+fn ratio<T>(ideal_len: i32, sums: &Sums, item: &Item<T>, active: &Node) -> f32 {
     let mut actual_len = sums.width - active.width;
 
     if let Item::Penalty { width, .. } = *item {
@@ -140,7 +141,7 @@ fn badness(ratio: f32) -> u32 {
 }
 
 #[inline]
-fn demerits(ratio: f32, class: usize, active: &Node, item: &Item, from_item: &Item) -> u32 {
+fn demerits<T>(ratio: f32, class: usize, active: &Node, item: &Item<T>, from_item: &Item<T>) -> u32 {
     let mut d = (LINE_DEMERITS + badness(ratio)).pow(2);
 
     if item.penalty() >= 0 {
@@ -163,7 +164,7 @@ fn demerits(ratio: f32, class: usize, active: &Node, item: &Item, from_item: &It
 }
 
 #[inline]
-fn sums_after(sums: &Sums, items: &[Item], position: usize) -> Sums {
+fn sums_after<T>(sums: &Sums, items: &[Item<T>], position: usize) -> Sums {
     let mut sums = *sums;
 
     for i in position..items.len() {
@@ -183,7 +184,7 @@ fn sums_after(sums: &Sums, items: &[Item], position: usize) -> Sums {
 }
 
 #[inline]
-fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i32], sums: &Sums, threshold: f32, boundary: usize, position: usize) {
+fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], lengths: &[i32], sums: &Sums, threshold: f32, boundary: usize, position: usize) {
     let mut current = *head;
     let mut previous = NULL;
 
@@ -269,7 +270,7 @@ fn explore(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item], lengths: &[i
     }
 }
 
-pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
+pub fn breakpoints<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
     let boundary = if looseness != 0 {
         ::std::usize::MAX
     } else {
@@ -287,7 +288,7 @@ pub fn breakpoints(items: &[Item], lengths: &[i32], mut threshold: f32, loosenes
 
     for position in 0..items.len() {
         match items[position] {
-            Item::Box { width } => sums.width += width,
+            Item::Box { width, .. } => sums.width += width,
             Item::Glue { width, stretch, shrink } => {
                 if position > 0 && items[position-1].is_box() {
                     explore(&mut nodes, &mut head, items, lengths, &sums, threshold, boundary, position);
@@ -379,7 +380,7 @@ mod tests {
         }
     }
 
-    fn glue_after(c: char) -> Item {
+    fn glue_after<T>(c: char) -> Item<T> {
         match c {
             ',' => Item::Glue { width: 6, stretch: 4, shrink: 2 },
             ';' => Item::Glue { width: 6, stretch: 4, shrink: 1 },
@@ -388,7 +389,7 @@ mod tests {
         }
     }
 
-    fn make_items(text: &str) -> Vec<Item> {
+    fn make_items(text: &str) -> Vec<Item<()>> {
         let mut result = Vec::new();
         let mut buf = String::new();
         let mut width = 0;
@@ -397,7 +398,7 @@ mod tests {
         for c in text.chars() {
             if "- ­".find(c).is_some() {
                 if !buf.is_empty() {
-                    result.push(Item::Box { width });
+                    result.push(Item::Box { width, data: () });
                     buf.clear();
                     width = 0;
                 }
@@ -406,7 +407,7 @@ mod tests {
             match c {
                 ' ' => result.push(glue_after(last_c)),
                 '-' => {
-                    result.push(Item::Box { width: char_width(c) });
+                    result.push(Item::Box { width: char_width(c), data: () });
                     result.push(Item::Penalty { width: 0,
                                                 penalty: HYPHEN_PENALTY,
                                                 flagged: true });
@@ -425,7 +426,7 @@ mod tests {
         }
 
         if !buf.is_empty() {
-            result.push(Item::Box { width });
+            result.push(Item::Box { width, data: () });
         }
 
         result.extend_from_slice(&[Item::Penalty { penalty: INFINITE_PENALTY,  width: 0, flagged: false },
