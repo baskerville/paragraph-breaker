@@ -2,7 +2,7 @@ const FITNESS_DEMERITS: u32  =  3_000;
 const FLAGGED_DEMERITS: u32  =    100;
 const LINE_DEMERITS: u32     =     10;
 
-const INFINITE_PENALTY: i32  = 10_000;
+pub const INFINITE_PENALTY: i32  = 10_000;
 
 const NULL: usize = ::std::usize::MAX;
 
