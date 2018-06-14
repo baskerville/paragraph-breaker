@@ -54,9 +54,7 @@ impl<T> Item<T> {
 struct Node {
     position: usize,
     line: usize,
-    width: i32,
-    stretch: i32,
-    shrink: i32,
+    sums: Sums,
     ratio: f32,
     demerits: u32,
     fitness_class: usize,
@@ -69,9 +67,7 @@ impl Default for Node {
         Node {
             position: 0,
             line: 0,
-            width: 0,
-            stretch: 0,
-            shrink: 0,
+            sums: Sums::default(),
             ratio: 0.0,
             demerits: 0,
             fitness_class: 1,
@@ -88,6 +84,16 @@ struct Sums {
     shrink: i32,
 }
 
+impl Default for Sums {
+    fn default() -> Self {
+        Sums {
+            width: 0,
+            stretch: 0,
+            shrink: 0,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 struct Candidate {
     demerits: u32,
@@ -96,22 +102,22 @@ struct Candidate {
 }
 
 #[inline]
-fn ratio<T>(ideal_len: i32, sums: &Sums, item: &Item<T>, active: &Node) -> f32 {
-    let mut actual_len = sums.width - active.width;
+fn ratio<T>(ideal_len: i32, sums: &Sums, previous_sums: &Sums, item: &Item<T>) -> f32 {
+    let mut actual_len = sums.width - previous_sums.width;
 
     if let Item::Penalty { width, .. } = *item {
         actual_len += width;
     }
 
     if actual_len < ideal_len {
-        let stretch = sums.stretch - active.stretch;
+        let stretch = sums.stretch - previous_sums.stretch;
         if stretch > 0 {
             (ideal_len - actual_len) as f32 / stretch as f32
         } else {
             ::std::f32::INFINITY
         }
     } else if actual_len > ideal_len {
-        let shrink = sums.shrink - active.shrink;
+        let shrink = sums.shrink - previous_sums.shrink;
         if shrink > 0 {
             (ideal_len - actual_len) as f32 / shrink as f32
         } else {
@@ -197,7 +203,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
             let next = nodes[current].next;
             let line = nodes[current].line + 1;
             let ideal_len = lengths[line.min(lengths.len() - 1)];
-            let ratio = ratio(ideal_len, sums, &items[position], &nodes[current]);
+            let ratio = ratio(ideal_len, sums, &nodes[current].sums, &items[position]);
 
             if ratio < -1.0 || items[position].penalty() == -INFINITE_PENALTY {
                 // Deactivate node.
@@ -245,9 +251,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
                         position,
                         line: nodes[candidates[c].address].line + 1,
                         fitness_class: c,
-                        width: sums_after.width,
-                        stretch: sums_after.stretch,
-                        shrink: sums_after.shrink,
+                        sums: sums_after,
                         ratio: candidates[c].ratio,
                         demerits: candidates[c].demerits,
                         best_from: candidates[c].address,
@@ -270,7 +274,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
     }
 }
 
-pub fn breakpoints<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
+pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
     let boundary = if looseness != 0 {
         ::std::usize::MAX
     } else {
@@ -353,6 +357,94 @@ pub fn breakpoints<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, lo
 
     result.pop();
     result.reverse();
+    result
+}
+
+pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Vec<(usize, f32)> {
+    let mut result = Vec::new();
+    let mut position = 0;
+    let mut line = 0;
+    let mut ideal_len = lengths[line.min(lengths.len() - 1)];
+    let mut sums = Sums::default();
+    let mut previous_sums = sums;
+    let mut current;
+
+    while position < items.len() {
+        current = &items[position];
+
+        match current {
+            Item::Box { width, .. } => sums.width += width,
+            Item::Glue { width, stretch, shrink } => {
+                sums.width += width;
+                sums.stretch += stretch;
+                sums.shrink += shrink;
+            },
+            _ => (),
+        }
+
+        let is_box = current.is_box();
+
+        if (is_box && (sums.width - previous_sums.width) > ideal_len) || current.penalty() == -INFINITE_PENALTY {
+            let mut r = ratio(ideal_len, &sums, &previous_sums, current);
+
+            if r < -1.0 && is_box {
+                let last_position = position;
+                let last_sums = sums;
+
+                while position > 0 {
+                    current = &items[position];
+                    match current {
+                        Item::Box { width, .. } => sums.width -= width,
+                        Item::Glue { width, stretch, shrink } => {
+                            sums.width -= width;
+                            sums.stretch -= stretch;
+                            sums.shrink -= shrink;
+                            break;
+                        },
+                        _ => (),
+                    }
+                    position -= 1;
+                }
+
+                r = ratio(ideal_len, &sums, &previous_sums, current);
+
+                if r > threshold {
+                    let first_position = position;
+                    position = last_position;
+                    sums = last_sums;
+
+                    while position > first_position {
+                        current = &items[position];
+                        match current {
+                            Item::Box { width, .. } => sums.width -= width,
+                            Item::Penalty { width, .. } if *width > 0 => {
+                                r = ratio(ideal_len, &sums, &previous_sums, current);
+                                if r >= -1.0 && r <= threshold {
+                                    break;
+                                }
+                            },
+                            _ => (),
+                        }
+                        position -= 1;
+                    }
+
+                    if position == first_position {
+                        position = last_position;
+                        sums = last_sums;
+                    }
+                }
+            }
+
+            previous_sums = sums_after(&sums, items, position);
+            result.push((position, r));
+
+            line += 1;
+            ideal_len = lengths[line.min(lengths.len() - 1)];
+        }
+
+        position += 1;
+    }
+
     result
 }
 
@@ -444,18 +536,23 @@ mod tests {
     fn test_breakpoints() {
         let mut items = make_items(FROG_PRINCE);
         items.insert(0, Item::Glue { width: 18, stretch: 0, shrink: 0 });
-        let narrow = breakpoints(&items, &[390], 1.0, 0);
-        let medium = breakpoints(&items, &[500], 1.0, 0);
-        let medium_tight = breakpoints(&items, &[500], 1.0, -1);
-        let medium_loose = breakpoints(&items, &[500], 2.5, 1);
+        let narrow = total_fit(&items, &[390], 1.0, 0);
+        let medium = total_fit(&items, &[500], 1.0, 0);
+        let medium_tight = total_fit(&items, &[500], 1.0, -1);
+        let medium_loose = total_fit(&items, &[500], 2.5, 1);
+
         // Knuth, Donald: Digital Typography, p. 81.
         assert_eq!(pos!(narrow), vec![18, 38, 64, 84, 106, 130, 155, 175, 199, 221, 241, 263]);
-        // Knuth, Donald: Digital Typography, p. 113.
+        // Ibid, p. 113.
         assert_eq!(pos!(medium), vec![24, 52, 82, 108, 141, 169, 199, 225, 253, 263]);
         assert_eq!(pos!(medium_tight), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
         assert_eq!(pos!(medium_loose), vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
         // If the algorithm can't satisfy the constraints, the return value is empty.
-        let too_narrow = breakpoints(&items, &[100], 1.0, 0);
+        let too_narrow = total_fit(&items, &[100], 1.0, 0);
         assert_eq!(too_narrow, vec![]);
+
+        // *Standard* algorithm (an informal description is given ibid, p. 68, last paragraph).
+        let narrow_std = standard_fit(&items, &[390], 1.0);
+        assert_eq!(pos!(narrow_std), vec![18, 40, 65, 86, 108, 133, 159, 179, 203, 223, 245, 263]);
     }
 }
