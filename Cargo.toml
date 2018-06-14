@@ -1,4 +1,4 @@
 [package]
-name = "line-breaker"
+name = "paragraph-breaker"
 version = "0.1.0"
 authors = ["Bastien Dejean <nihilhill@gmail.com>"]
