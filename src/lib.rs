@@ -375,71 +375,99 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
         match current {
             Item::Box { width, .. } => sums.width += width,
             Item::Glue { width, stretch, shrink } => {
-                sums.width += width;
-                sums.stretch += stretch;
-                sums.shrink += shrink;
+                if (sums.width - previous_sums.width) > ideal_len && position > 0 && items[position - 1].is_box() {
+                    let mut r = ratio(ideal_len, &sums, &previous_sums, current);
+
+                    if r < -1.0 {
+                        let high_position = position;
+                        let high_sums = sums;
+                        position -= 1;
+
+                        while position > 0 {
+                            current = &items[position];
+
+                            match current {
+                                Item::Box { width, .. } => {
+                                    sums.width -= width;
+                                }
+                                Item::Glue { width, stretch, shrink } => {
+                                    sums.width -= width;
+                                    sums.stretch -= stretch;
+                                    sums.shrink -= shrink;
+                                    if items[position - 1].is_box() {
+                                        break;
+                                    }
+                                },
+                                _ => (),
+                            }
+
+                            position -= 1;
+                        }
+
+                        r = ratio(ideal_len, &sums, &previous_sums, current);
+
+                        if r > threshold {
+                            let low_position = position;
+                            let low_sums = sums;
+                            let low_ratio = r;
+                            position = high_position;
+                            sums = high_sums;
+
+                            while position > low_position {
+                                current = &items[position];
+
+                                match current {
+                                    Item::Box { width, .. } => sums.width -= width,
+                                    Item::Penalty { width, .. } if *width > 0 => {
+                                        r = ratio(ideal_len, &sums, &previous_sums, current);
+                                        if r >= -1.0 && r <= threshold {
+                                            break;
+                                        }
+                                    },
+                                    _ => (),
+                                }
+
+                                position -= 1;
+                            }
+
+                            if position == low_position {
+                                sums = low_sums;
+                                r = low_ratio;
+                            }
+                        }
+                    }
+
+                    previous_sums = sums;
+                    result.push((position, r));
+
+                    position += 1;
+
+                    while position < items.len() {
+                        current = &items[position];
+                        if current.is_box() {
+                            break;
+                        }
+                        position += 1;
+                    }
+
+                    line += 1;
+                    ideal_len = lengths[line.min(lengths.len() - 1)];
+
+                    continue;
+                } else {
+                    sums.width += width;
+                    sums.stretch += stretch;
+                    sums.shrink += shrink;
+                }
+            },
+            Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => {
+                let r = ratio(ideal_len, &sums, &previous_sums, current);
+                result.push((position, r));
+                previous_sums = sums;
+                line += 1;
+                ideal_len = lengths[line.min(lengths.len() - 1)];
             },
             _ => (),
-        }
-
-        let is_box = current.is_box();
-
-        if (is_box && (sums.width - previous_sums.width) > ideal_len) || current.penalty() == -INFINITE_PENALTY {
-            let mut r = ratio(ideal_len, &sums, &previous_sums, current);
-
-            if r < -1.0 && is_box {
-                let last_position = position;
-                let last_sums = sums;
-
-                while position > 0 {
-                    current = &items[position];
-                    match current {
-                        Item::Box { width, .. } => sums.width -= width,
-                        Item::Glue { width, stretch, shrink } => {
-                            sums.width -= width;
-                            sums.stretch -= stretch;
-                            sums.shrink -= shrink;
-                            break;
-                        },
-                        _ => (),
-                    }
-                    position -= 1;
-                }
-
-                r = ratio(ideal_len, &sums, &previous_sums, current);
-
-                if r > threshold {
-                    let first_position = position;
-                    position = last_position;
-                    sums = last_sums;
-
-                    while position > first_position {
-                        current = &items[position];
-                        match current {
-                            Item::Box { width, .. } => sums.width -= width,
-                            Item::Penalty { width, .. } if *width > 0 => {
-                                r = ratio(ideal_len, &sums, &previous_sums, current);
-                                if r >= -1.0 && r <= threshold {
-                                    break;
-                                }
-                            },
-                            _ => (),
-                        }
-                        position -= 1;
-                    }
-
-                    if position == first_position {
-                        position = last_position;
-                        sums = last_sums;
-                    }
-                }
-            }
-
-            previous_sums = sums_after(&sums, items, position);
-            result.push((position, r));
-
-            line += 1;
-            ideal_len = lengths[line.min(lengths.len() - 1)];
         }
 
         position += 1;
@@ -552,7 +580,9 @@ mod tests {
         assert_eq!(too_narrow, vec![]);
 
         // *Standard* algorithm (an informal description is given ibid, p. 68, last paragraph).
-        let narrow_std = standard_fit(&items, &[390], 1.0);
-        assert_eq!(pos!(narrow_std), vec![18, 40, 65, 86, 108, 133, 159, 179, 203, 223, 245, 263]);
+        let std_narrow = standard_fit(&items, &[390], 1.0);
+        let std_medium = standard_fit(&items, &[500], 1.0);
+        assert_eq!(pos!(std_narrow), vec![18, 40, 66, 86, 108, 132, 157, 177, 201, 221, 243, 263]);
+        assert_eq!(pos!(std_medium), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
     }
 }
