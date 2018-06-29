@@ -4,4 +4,4 @@ description = "An implementation of the Knuth-Plass algorithm for breaking parag
 repository = "https://github.com/baskerville/paragraph-breaker"
 authors = ["Bastien Dejean <nihilhill@gmail.com>"]
 version = "0.1.0"
-licence = "MIT"
+license = "MIT"
