@@ -56,6 +56,7 @@ struct Node {
     line: usize,
     sums: Sums,
     ratio: f32,
+    width: i32,
     demerits: u32,
     fitness_class: usize,
     best_from: usize,
@@ -69,6 +70,7 @@ impl Default for Node {
             line: 0,
             sums: Sums::default(),
             ratio: 0.0,
+            width: 0,
             demerits: 0,
             fitness_class: 1,
             best_from: NULL,
@@ -99,10 +101,18 @@ struct Candidate {
     demerits: u32,
     address: usize,
     ratio: f32,
+    width: i32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Breakpoint {
+    pub position: usize,
+    pub ratio: f32,
+    pub width: i32,
 }
 
 #[inline]
-fn ratio<T>(ideal_len: i32, sums: &Sums, previous_sums: &Sums, item: &Item<T>) -> f32 {
+fn ratio<T>(ideal_len: i32, sums: &Sums, previous_sums: &Sums, item: &Item<T>) -> (f32, i32) {
     let mut actual_len = sums.width - previous_sums.width;
 
     if let Item::Penalty { width, .. } = *item {
@@ -112,19 +122,19 @@ fn ratio<T>(ideal_len: i32, sums: &Sums, previous_sums: &Sums, item: &Item<T>) -
     if actual_len < ideal_len {
         let stretch = sums.stretch - previous_sums.stretch;
         if stretch > 0 {
-            (ideal_len - actual_len) as f32 / stretch as f32
+            ((ideal_len - actual_len) as f32 / stretch as f32, actual_len)
         } else {
-            ::std::f32::INFINITY
+            (::std::f32::INFINITY, actual_len)
         }
     } else if actual_len > ideal_len {
         let shrink = sums.shrink - previous_sums.shrink;
         if shrink > 0 {
-            (ideal_len - actual_len) as f32 / shrink as f32
+            ((ideal_len - actual_len) as f32 / shrink as f32, actual_len)
         } else {
-            ::std::f32::NEG_INFINITY
+            (::std::f32::NEG_INFINITY, actual_len)
         }
     } else {
-        0.0
+        (0.0, actual_len)
     }
 }
 
@@ -198,12 +208,13 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
         let mut min_demerits = ::std::u32::MAX;
         let mut candidates = [Candidate { demerits: ::std::u32::MAX,
                                           address: NULL,
-                                          ratio: 0.0 }; 4];
+                                          ratio: 0.0,
+                                          width: 0 }; 4];
         loop {
             let next = nodes[current].next;
             let line = nodes[current].line + 1;
             let ideal_len = lengths[line.min(lengths.len() - 1)];
-            let ratio = ratio(ideal_len, sums, &nodes[current].sums, &items[position]);
+            let (ratio, actual_len) = ratio(ideal_len, sums, &nodes[current].sums, &items[position]);
 
             if ratio < -1.0 || items[position].penalty() == -INFINITE_PENALTY {
                 // Deactivate node.
@@ -224,6 +235,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
                     candidates[class].demerits = d;
                     candidates[class].address = current;
                     candidates[class].ratio = ratio;
+                    candidates[class].width = actual_len;
                     if d < min_demerits {
                         min_demerits = d;
                     }
@@ -253,6 +265,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
                         fitness_class: c,
                         sums: sums_after,
                         ratio: candidates[c].ratio,
+                        width: candidates[c].width,
                         demerits: candidates[c].demerits,
                         best_from: candidates[c].address,
                         next: current,
@@ -274,7 +287,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
     }
 }
 
-pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<(usize, f32)> {
+pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, looseness: i32) -> Vec<Breakpoint> {
     let boundary = if looseness != 0 {
         ::std::usize::MAX
     } else {
@@ -351,8 +364,11 @@ pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, loos
     let mut result = Vec::new();
 
     while chosen != NULL {
-        result.push((nodes[chosen].position, nodes[chosen].ratio));
-        chosen = nodes[chosen].best_from;
+        let node = nodes[chosen];
+        result.push(Breakpoint { position: node.position,
+                                 ratio: node.ratio,
+                                 width: node.width });
+        chosen = node.best_from;
     }
 
     result.pop();
@@ -360,7 +376,7 @@ pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, loos
     result
 }
 
-pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Vec<(usize, f32)> {
+pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Vec<Breakpoint> {
     let mut result = Vec::new();
     let mut position = 0;
     let mut line = 0;
@@ -376,7 +392,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
             Item::Box { width, .. } => sums.width += width,
             Item::Glue { width, stretch, shrink } => {
                 if (sums.width - previous_sums.width) > ideal_len && position > 0 && items[position - 1].is_box() {
-                    let mut r = ratio(ideal_len, &sums, &previous_sums, current);
+                    let (mut r, mut w) = ratio(ideal_len, &sums, &previous_sums, current);
 
                     if r < -1.0 {
                         let high_position = position;
@@ -404,12 +420,14 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                             position -= 1;
                         }
 
-                        r = ratio(ideal_len, &sums, &previous_sums, current);
+                        let (r1, w1) = ratio(ideal_len, &sums, &previous_sums, current);
+                        r = r1; w = w1;
 
-                        if r > threshold {
+                        if r1 > threshold {
                             let low_position = position;
                             let low_sums = sums;
                             let low_ratio = r;
+                            let low_width = w;
                             position = high_position;
                             sums = high_sums;
 
@@ -419,7 +437,8 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                                 match current {
                                     Item::Box { width, .. } => sums.width -= width,
                                     Item::Penalty { width, .. } if *width > 0 => {
-                                        r = ratio(ideal_len, &sums, &previous_sums, current);
+                                        let (r2, w2) = ratio(ideal_len, &sums, &previous_sums, current);
+                                        r = r2; w = w2;
                                         if r >= -1.0 && r <= threshold {
                                             break;
                                         }
@@ -433,12 +452,13 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                             if position == low_position {
                                 sums = low_sums;
                                 r = low_ratio;
+                                w = low_width;
                             }
                         }
                     }
 
                     previous_sums = sums;
-                    result.push((position, r));
+                    result.push(Breakpoint { position, ratio: r, width: w });
 
                     position += 1;
 
@@ -461,8 +481,8 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                 }
             },
             Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => {
-                let r = ratio(ideal_len, &sums, &previous_sums, current);
-                result.push((position, r));
+                let (r, w) = ratio(ideal_len, &sums, &previous_sums, current);
+                result.push(Breakpoint { position, ratio: r, width: w });
                 previous_sums = sums;
                 line += 1;
                 ideal_len = lengths[line.min(lengths.len() - 1)];
@@ -557,7 +577,7 @@ mod tests {
     }
 
     macro_rules! pos {
-        ($x:expr) => ($x.iter().map(|x| x.0).collect::<Vec<usize>>());
+        ($x:expr) => ($x.iter().map(|x| x.position).collect::<Vec<usize>>());
     }
 
     #[test]
@@ -577,7 +597,7 @@ mod tests {
         assert_eq!(pos!(medium_loose), vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
         // If the algorithm can't satisfy the constraints, the return value is empty.
         let too_narrow = total_fit(&items, &[100], 1.0, 0);
-        assert_eq!(too_narrow, vec![]);
+        assert!(too_narrow.is_empty());
 
         // *Standard* algorithm (an informal description is given ibid, p. 68, last paragraph).
         let std_narrow = standard_fit(&items, &[390], 1.0);
