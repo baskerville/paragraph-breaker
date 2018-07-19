@@ -379,6 +379,7 @@ pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, loos
 pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Vec<Breakpoint> {
     let mut result = Vec::new();
     let mut position = 0;
+    let mut previous_position = position;
     let mut line = 0;
     let mut ideal_len = lengths[line.min(lengths.len() - 1)];
     let mut sums = Sums::default();
@@ -391,7 +392,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
         match current {
             Item::Box { width, .. } => sums.width += width,
             Item::Glue { width, stretch, shrink } => {
-                if (sums.width - previous_sums.width) > ideal_len && position > 0 && items[position - 1].is_box() {
+                if (sums.width - previous_sums.width) > ideal_len && position > previous_position && items[position - 1].is_box() {
                     let (mut r, mut w) = ratio(ideal_len, &sums, &previous_sums, current);
 
                     if r < -1.0 {
@@ -399,7 +400,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                         let high_sums = sums;
                         position -= 1;
 
-                        while position > 0 {
+                        while position > previous_position {
                             current = &items[position];
 
                             match current {
@@ -420,10 +421,14 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                             position -= 1;
                         }
 
+                        if position == previous_position {
+                            return vec![];
+                        }
+
                         let (r1, w1) = ratio(ideal_len, &sums, &previous_sums, current);
                         r = r1; w = w1;
 
-                        if r1 > threshold {
+                        if r > threshold {
                             let low_position = position;
                             let low_sums = sums;
                             let low_ratio = r;
@@ -457,6 +462,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                         }
                     }
 
+                    previous_position = position;
                     previous_sums = sums;
                     result.push(Breakpoint { position, ratio: r, width: w });
 
@@ -483,6 +489,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
             Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => {
                 let (r, w) = ratio(ideal_len, &sums, &previous_sums, current);
                 result.push(Breakpoint { position, ratio: r, width: w });
+                previous_position = position;
                 previous_sums = sums;
                 line += 1;
                 ideal_len = lengths[line.min(lengths.len() - 1)];
@@ -604,5 +611,11 @@ mod tests {
         let std_medium = standard_fit(&items, &[500], 1.0);
         assert_eq!(pos!(std_narrow), vec![18, 40, 66, 86, 108, 132, 157, 177, 201, 221, 243, 263]);
         assert_eq!(pos!(std_medium), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
+
+        // If one of the boxes is larger than the line, the return value is empty.
+        let absurd_items = vec![Item::Box { width: 100, data: () },
+                                Item::Glue { width: 0, stretch: 0, shrink: 0 }];
+        let std_absurd = standard_fit(&absurd_items, &[90], 1.0);
+        assert!(std_absurd.is_empty());
     }
 }
