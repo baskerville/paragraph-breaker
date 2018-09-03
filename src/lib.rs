@@ -470,10 +470,11 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
 
                     while index < items.len() {
                         current = &items[index];
-                        if current.is_box() {
-                            break;
-                        }
-                        index += 1;
+                        match current {
+                            Item::Box { .. } => break,
+                            Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => break,
+                            _ => index += 1,
+                         }
                     }
 
                     line += 1;
