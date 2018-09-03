@@ -34,6 +34,14 @@ impl<T> Item<T> {
     }
 
     #[inline]
+    pub fn is_glue(&self) -> bool {
+        match *self {
+            Item::Glue { .. } => true,
+            _ => false
+        }
+    }
+
+    #[inline]
     pub fn penalty(&self) -> i32 {
         match *self {
             Item::Penalty { penalty, .. } => penalty,
@@ -326,7 +334,7 @@ pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, loos
     }
 
     if head == NULL {
-        return vec![];
+        return Vec::new();
     }
 
     let mut current = head;
@@ -390,15 +398,14 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
         current = &items[index];
 
         match current {
-            Item::Box { width, .. } => sums.width += width,
-            Item::Glue { width, stretch, shrink } => {
-                if (sums.width - previous_sums.width) > ideal_len && index > previous_index && items[index - 1].is_box() {
+            Item::Box { width, .. } => {
+                sums.width += width;
+                if (sums.width - previous_sums.width) > ideal_len {
                     let (mut r, mut w) = ratio(ideal_len, &sums, &previous_sums, current);
 
                     if r < -1.0 {
                         let high_index = index;
                         let high_sums = sums;
-                        index -= 1;
 
                         while index > previous_index {
                             current = &items[index];
@@ -422,7 +429,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                         }
 
                         if index == previous_index {
-                            return vec![];
+                            return Vec::new();
                         }
 
                         let (r1, w1) = ratio(ideal_len, &sums, &previous_sums, current);
@@ -460,6 +467,12 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                                 w = low_width;
                             }
                         }
+                    } else {
+                        if index == items.len() - 1 || !items[index+1].is_glue() {
+                            index += 1;
+                            continue;
+                        }
+                        index += 1;
                     }
 
                     previous_index = index;
@@ -481,11 +494,12 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                     ideal_len = lengths[line.min(lengths.len() - 1)];
 
                     continue;
-                } else {
-                    sums.width += width;
-                    sums.stretch += stretch;
-                    sums.shrink += shrink;
                 }
+            },
+            Item::Glue { width, stretch, shrink } => {
+                sums.width += width;
+                sums.stretch += stretch;
+                sums.shrink += shrink;
             },
             Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => {
                 let (r, w) = ratio(ideal_len, &sums, &previous_sums, current);
@@ -618,5 +632,17 @@ mod tests {
                                 Item::Glue { width: 0, stretch: 0, shrink: 0 }];
         let std_absurd = standard_fit(&absurd_items, &[90], 1.0);
         assert!(std_absurd.is_empty());
+
+        // Ratios should be above or equal to -1.0.
+        let items = vec![Item::Box { width: 100, data: () },
+                         Item::Glue { width: 50, stretch: 20, shrink: 10 },
+                         Item::Box { width: 100, data: () },
+                         Item::Glue { width: 50, stretch: 20, shrink: 10 },
+                         Item::Box { width: 100, data: () },
+                         Item::Penalty { penalty: INFINITE_PENALTY,  width: 0, flagged: false },
+                         Item::Glue { width: 0, stretch: INFINITE_PENALTY, shrink: 0 },
+                         Item::Penalty { penalty: -INFINITE_PENALTY,  width: 0, flagged: true }];
+        let std_items = standard_fit(&items, &[300], 1.0);
+        assert_eq!(pos!(std_items), vec![3, 7]);
     }
 }
