@@ -221,7 +221,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
         loop {
             let next = nodes[current].next;
             let line = nodes[current].line + 1;
-            let ideal_len = lengths[line.min(lengths.len() - 1)];
+            let ideal_len = lengths[(line - 1).min(lengths.len() - 1)];
             let (ratio, actual_len) = ratio(ideal_len, sums, &nodes[current].sums, &items[index]);
 
             if ratio < -1.0 || items[index].penalty() == -INFINITE_PENALTY {
@@ -604,28 +604,27 @@ mod tests {
 
     #[test]
     fn test_breakpoints() {
-        let mut items = make_items(FROG_PRINCE);
-        items.insert(0, Item::Glue { width: 18, stretch: 0, shrink: 0 });
-        let narrow = total_fit(&items, &[390], 1.0, 0);
-        let medium = total_fit(&items, &[500], 1.0, 0);
-        let medium_tight = total_fit(&items, &[500], 1.0, -1);
-        let medium_loose = total_fit(&items, &[500], 2.5, 1);
+        let items = make_items(FROG_PRINCE);
+        let narrow = total_fit(&items, &[372, 390], 1.0, 0);
+        let medium = total_fit(&items, &[482, 500], 1.0, 0);
+        let medium_tight = total_fit(&items, &[482, 500], 1.0, -1);
+        let medium_loose = total_fit(&items, &[482, 500], 2.5, 1);
 
         // Knuth, Donald: Digital Typography, p. 81.
-        assert_eq!(pos!(narrow), vec![18, 38, 64, 84, 106, 130, 155, 175, 199, 221, 241, 263]);
+        assert_eq!(pos!(narrow), vec![17, 37, 63, 83, 105, 129, 154, 174, 198, 220, 240, 262]);
         // Ibid, p. 113.
-        assert_eq!(pos!(medium), vec![24, 52, 82, 108, 141, 169, 199, 225, 253, 263]);
-        assert_eq!(pos!(medium_tight), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
-        assert_eq!(pos!(medium_loose), vec![22, 48, 78, 102, 130, 159, 183, 209, 235, 259, 263]);
+        assert_eq!(pos!(medium), vec![23, 51, 81, 107, 140, 168, 198, 224, 252, 262]);
+        assert_eq!(pos!(medium_tight), vec![25, 53, 83, 111, 146, 172, 204, 232, 262]);
+        assert_eq!(pos!(medium_loose), vec![21, 47, 77, 101, 129, 158, 182, 208, 234, 258, 262]);
         // If the algorithm can't satisfy the constraints, the return value is empty.
-        let too_narrow = total_fit(&items, &[100], 1.0, 0);
+        let too_narrow = total_fit(&items, &[82, 100], 1.0, 0);
         assert!(too_narrow.is_empty());
 
         // *Standard* algorithm (an informal description is given ibid, p. 68, last paragraph).
-        let std_narrow = standard_fit(&items, &[390], 1.0);
-        let std_medium = standard_fit(&items, &[500], 1.0);
-        assert_eq!(pos!(std_narrow), vec![18, 40, 66, 86, 108, 132, 157, 177, 201, 221, 243, 263]);
-        assert_eq!(pos!(std_medium), vec![26, 54, 84, 112, 147, 173, 205, 233, 263]);
+        let std_narrow = standard_fit(&items, &[372, 390], 1.0);
+        let std_medium = standard_fit(&items, &[482, 500], 1.0);
+        assert_eq!(pos!(std_narrow), vec![17, 39, 65, 85, 107, 131, 156, 176, 200, 220, 242, 262]);
+        assert_eq!(pos!(std_medium), vec![25, 53, 83, 111, 146, 172, 204, 232, 262]);
 
         // If one of the boxes is larger than the line, the return value is empty.
         let absurd_items = vec![Item::Box { width: 100, data: () },
