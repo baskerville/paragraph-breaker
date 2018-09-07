@@ -448,7 +448,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
 
                                 match current {
                                     Item::Box { width, .. } => sums.width -= width,
-                                    Item::Penalty { width, .. } if *width > 0 => {
+                                    Item::Penalty { .. } => {
                                         let (r2, w2) = ratio(ideal_len, &sums, &previous_sums, current);
                                         r = r2; w = w2;
                                         if r >= -1.0 && r <= threshold {
