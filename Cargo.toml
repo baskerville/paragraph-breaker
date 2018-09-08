@@ -3,5 +3,5 @@ name = "paragraph-breaker"
 description = "An implementation of the Knuth-Plass algorithm for breaking paragraphs into lines"
 repository = "https://github.com/baskerville/paragraph-breaker"
 authors = ["Bastien Dejean <nihilhill@gmail.com>"]
-version = "0.3.3"
+version = "0.3.4"
 license = "MIT"
