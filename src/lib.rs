@@ -311,7 +311,16 @@ pub fn total_fit<T>(items: &[Item<T>], lengths: &[i32], mut threshold: f32, loos
     let mut head = 0;
     let mut sums = Sums { width: 0, stretch: 0, shrink: 0 };
 
-    for index in 0..items.len() {
+    let mut start_index = 0;
+    while start_index < items.len() {
+        match items[start_index] {
+            Item::Box { .. } => break,
+            Item::Penalty { penalty, .. } if penalty == -INFINITE_PENALTY => break,
+            _ => start_index += 1,
+        }
+    }
+
+    for index in start_index..items.len() {
         match items[index] {
             Item::Box { width, .. } => sums.width += width,
             Item::Glue { width, stretch, shrink } => {
@@ -393,6 +402,14 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
     let mut sums = Sums::default();
     let mut previous_sums = sums;
     let mut current;
+
+    while index < items.len() {
+        match items[index] {
+            Item::Box { .. } => break,
+            Item::Penalty { penalty, .. } if penalty == -INFINITE_PENALTY => break,
+            _ => index += 1,
+        }
+    }
 
     while index < items.len() {
         current = &items[index];
