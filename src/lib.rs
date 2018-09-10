@@ -472,6 +472,11 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                                             break;
                                         }
                                     },
+                                    Item::Glue { width, stretch, shrink } => {
+                                        sums.width -= width;
+                                        sums.stretch -= stretch;
+                                        sums.shrink -= shrink;
+                                    },
                                     _ => (),
                                 }
 
