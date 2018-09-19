@@ -430,7 +430,10 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                             match current {
                                 Item::Box { width, .. } => {
                                     sums.width -= width;
-                                }
+                                },
+                                Item::Penalty { penalty, flagged, .. } if !flagged && *penalty < INFINITE_PENALTY => {
+                                    break;
+                                },
                                 Item::Glue { width, stretch, shrink } => {
                                     sums.width -= width;
                                     sums.stretch -= stretch;
