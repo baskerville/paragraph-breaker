@@ -527,7 +527,26 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                 sums.shrink += shrink;
             },
             Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY => {
-                let (r, w) = ratio(ideal_len, &sums, &previous_sums, current);
+                let (mut r, mut w) = ratio(ideal_len, &sums, &previous_sums, current);
+                if r < -1.0 {
+                    let mut i = index - 1;
+                    while i > previous_index {
+                        current = &items[i];
+                        match current {
+                            Item::Box { .. } => break,
+                            Item::Glue { width, stretch, shrink } => {
+                                sums.width -= width;
+                                sums.stretch -= stretch;
+                                sums.shrink -= shrink;
+                            },
+                            _ => (),
+                        }
+                        i -= 1;
+                    }
+                    let (r1, w1) = ratio(ideal_len, &sums, &previous_sums, current);
+                    r = r1; w = w1;
+                }
+
                 result.push(Breakpoint { index, ratio: r, width: w });
                 previous_index = index;
                 previous_sums = sums;
