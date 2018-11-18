@@ -1,6 +1,6 @@
 const FITNESS_DEMERITS: u32  =  3_000;
-const FLAGGED_DEMERITS: u32  =    100;
-const LINE_DEMERITS: u32     =     10;
+const FLAGGED_DEMERITS: u32  =  3_000;
+const LINE_PENALTY: u32     =     10;
 
 pub const INFINITE_PENALTY: i32  = 10_000;
 
@@ -166,7 +166,7 @@ fn badness(ratio: f32) -> u32 {
 
 #[inline]
 fn demerits<T>(ratio: f32, class: usize, active: &Node, item: &Item<T>, from_item: &Item<T>) -> u32 {
-    let mut d = (LINE_DEMERITS + badness(ratio)).pow(2);
+    let mut d = (LINE_PENALTY + badness(ratio)).pow(2);
 
     if item.penalty() >= 0 {
         d = d.saturating_add(item.penalty().pow(2) as u32);
