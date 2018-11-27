@@ -400,6 +400,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
     let mut line = 0;
     let mut ideal_len = lengths[line.min(lengths.len() - 1)];
     let mut sums = Sums::default();
+    let mut consecutive_flagged = 0;
     let mut previous_sums = sums;
     let mut current;
 
@@ -468,7 +469,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
 
                                 match current {
                                     Item::Box { width, .. } => sums.width -= width,
-                                    Item::Penalty { penalty, .. } if *penalty < INFINITE_PENALTY => {
+                                    Item::Penalty { penalty, flagged, .. } if *penalty < INFINITE_PENALTY && (!flagged || consecutive_flagged < 2) => {
                                         let (r2, w2) = ratio(ideal_len, &sums, &previous_sums, current);
                                         r = r2; w = w2;
                                         if r >= -1.0 && r <= low_ratio {
@@ -503,6 +504,12 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                     previous_index = index;
                     previous_sums = sums;
                     result.push(Breakpoint { index, ratio: r, width: w });
+
+                    if current.flagged() {
+                        consecutive_flagged += 1;
+                    } else {
+                        consecutive_flagged = 0;
+                    }
 
                     index += 1;
 
