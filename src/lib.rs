@@ -1,5 +1,5 @@
 const FITNESS_DEMERITS: u32  =  10_000;
-const FLAGGED_DEMERITS: u32  =  10_000;
+const FLAGGED_DEMERITS: u32  =  30_000;
 const LINE_PENALTY: u32     =     10;
 
 pub const INFINITE_PENALTY: i32  = 10_000;
