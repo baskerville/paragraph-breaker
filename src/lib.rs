@@ -424,6 +424,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                     if r < -1.0 {
                         let high_index = index;
                         let high_sums = sums;
+                        let mut boxes_count = 0;
 
                         while index > previous_index {
                             current = &items[index];
@@ -431,6 +432,7 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                             match current {
                                 Item::Box { width, .. } => {
                                     sums.width -= width;
+                                    boxes_count += 1;
                                 },
                                 Item::Penalty { penalty, flagged, .. } if !flagged && *penalty < INFINITE_PENALTY => {
                                     break;
@@ -450,7 +452,20 @@ pub fn standard_fit<T>(items: &[Item<T>], lengths: &[i32], threshold: f32) -> Ve
                         }
 
                         if index == previous_index {
-                            return Vec::new();
+                            if boxes_count == high_index - previous_index {
+                                return Vec::new();
+                            } else {
+                                index = high_index;
+                                sums = high_sums;
+                                while index > previous_index {
+                                    if let Item::Box { width, .. } = items[index] {
+                                        sums.width -= width;
+                                        index -= 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
                         }
 
                         let (r1, w1) = ratio(ideal_len, &sums, &previous_sums, current);
