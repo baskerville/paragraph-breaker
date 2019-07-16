@@ -267,7 +267,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
                     let sums_after = sums_after(sums, items, index);
                     // Activate node.
                     let new_addr = nodes.len();
-                    let mut node = Node {
+                    let node = Node {
                         index,
                         line: nodes[candidates[c].address].line + 1,
                         fitness_class: c,
