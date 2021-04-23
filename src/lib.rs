@@ -169,9 +169,9 @@ fn demerits<T>(ratio: f32, class: usize, active: &Node, item: &Item<T>, from_ite
     let mut d = (LINE_PENALTY + badness(ratio)).pow(2);
 
     if item.penalty() >= 0 {
-        d = d.saturating_add(item.penalty().pow(2) as u32);
+        d = d.saturating_add(item.penalty().saturating_pow(2) as u32);
     } else if item.penalty() != -INFINITE_PENALTY {
-        d = d.saturating_sub(item.penalty().pow(2) as u32);
+        d = d.saturating_sub(item.penalty().saturating_pow(2) as u32);
     }
 
     if item.flagged() && from_item.flagged() {
