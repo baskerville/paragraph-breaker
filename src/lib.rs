@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 const FITNESS_DEMERITS: u32  =  10_000;
 const FLAGGED_DEMERITS: u32  =  30_000;
 const LINE_PENALTY: u32     =     10;
@@ -27,18 +29,12 @@ pub enum Item<T> {
 impl<T> Item<T> {
     #[inline]
     pub fn is_box(&self) -> bool {
-        match *self {
-            Item::Box { .. } => true,
-            _ => false
-        }
+        matches!(*self, Item::Box { .. })
     }
 
     #[inline]
     pub fn is_glue(&self) -> bool {
-        match *self {
-            Item::Glue { .. } => true,
-            _ => false
-        }
+        matches!(*self, Item::Glue { .. })
     }
 
     #[inline]
@@ -127,22 +123,24 @@ fn ratio<T>(ideal_len: i32, sums: &Sums, previous_sums: &Sums, item: &Item<T>) -
         actual_len += width;
     }
 
-    if actual_len < ideal_len {
-        let stretch = sums.stretch - previous_sums.stretch;
-        if stretch > 0 {
-            ((ideal_len - actual_len) as f32 / stretch as f32, actual_len)
-        } else {
-            (::std::f32::INFINITY, actual_len)
-        }
-    } else if actual_len > ideal_len {
-        let shrink = sums.shrink - previous_sums.shrink;
-        if shrink > 0 {
-            ((ideal_len - actual_len) as f32 / shrink as f32, actual_len)
-        } else {
-            (::std::f32::NEG_INFINITY, actual_len)
-        }
-    } else {
-        (0.0, actual_len)
+    match actual_len.cmp(&ideal_len) {
+        Ordering::Less => {
+            let stretch = sums.stretch - previous_sums.stretch;
+            if stretch > 0 {
+                ((ideal_len - actual_len) as f32 / stretch as f32, actual_len)
+            } else {
+                (::std::f32::INFINITY, actual_len)
+            }
+        },
+        Ordering::Greater => {
+            let shrink = sums.shrink - previous_sums.shrink;
+            if shrink > 0 {
+                ((ideal_len - actual_len) as f32 / shrink as f32, actual_len)
+            } else {
+                (::std::f32::NEG_INFINITY, actual_len)
+            }
+        },
+        Ordering::Equal => (0.0, actual_len),
     }
 }
 
@@ -191,15 +189,15 @@ fn demerits<T>(ratio: f32, class: usize, active: &Node, item: &Item<T>, from_ite
 fn sums_after<T>(sums: &Sums, items: &[Item<T>], index: usize) -> Sums {
     let mut sums = *sums;
 
-    for i in index..items.len() {
-        match items[i] {
+    for (i, item) in items.iter().enumerate().skip(index) {
+        match item {
             Item::Box { .. } => break,
             Item::Glue { width, stretch, shrink } => {
                 sums.width += width;
                 sums.stretch += stretch;
                 sums.shrink += shrink;
             },
-            Item::Penalty { penalty, .. } if penalty == -INFINITE_PENALTY && i > index => break,
+            Item::Penalty { penalty, .. } if *penalty == -INFINITE_PENALTY && i > index => break,
             _ => {},
         }
     }
@@ -600,7 +598,7 @@ mod tests {
                                          10, 9, 10, 10, 7, 7, 7, 10, 9, 13, 10, 10, 8];
     fn char_width(c: char) -> i32 {
         match c {
-            'a' ... 'z' => LOWERCASE_WIDTHS[c as usize - 'a' as usize],
+            'a' ..= 'z' => LOWERCASE_WIDTHS[c as usize - 'a' as usize],
             'C' => 13,
             'I' | '-' | '­' | ' ' => 6,
             ',' | ';' | '.' | '’' => 5,
