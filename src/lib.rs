@@ -263,7 +263,7 @@ fn explore<T>(nodes: &mut Vec<Node>, head: &mut usize, items: &[Item<T>], length
 
         if min_demerits < ::std::u32::MAX {
             for c in 0..candidates.len() {
-                if candidates[c].demerits < min_demerits + FITNESS_DEMERITS {
+                if candidates[c].demerits < min_demerits.saturating_add(FITNESS_DEMERITS) {
                     let sums_after = sums_after(sums, items, index);
                     // Activate node.
                     let new_addr = nodes.len();
